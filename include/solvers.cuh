@@ -34,8 +34,9 @@ __device__ float friction_w_neighbour(Pt Xi, Pt r, float dist, int i, int j)
     return 0;
 }
 
+// For points with negligible friction among each other use:
 template<typename Pt>
-__device__ float friction_on_background(Pt Xi, Pt r, float dist, int i, int j)
+__device__ float viscous_drag(Pt Xi, Pt r, float dist, int i, int j)
 {
     return 0;
 }

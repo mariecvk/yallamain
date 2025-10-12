@@ -171,7 +171,7 @@ int main(int argc, const char* argv[])
 
     // Initial relaxation
     for (auto time_step = 0; time_step <= 100; time_step++)
-        cells.take_step<relu_force, friction_on_background>(dt, wall);
+        cells.take_step<relu_force, viscous_drag>(dt, wall);
 
     Links protrusions{n_max, protrusion_strength};
     protrusions.set_d_n(n_0);

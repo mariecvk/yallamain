@@ -188,7 +188,7 @@ int main(int argc, char const* argv[])
         thrust::fill(thrust::device, n_epi_nbs.d_prop,
             n_epi_nbs.d_prop + cells.get_d_n(), 0);
 
-        cells.take_step<force, friction_on_background>(dt);
+        cells.take_step<force, viscous_drag>(dt);
 
         output.write_positions(cells);
         output.write_polarity(cells);

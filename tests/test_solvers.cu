@@ -190,7 +190,7 @@ const char* test_friction()
     tile.h_X[1] = float3{.5, 0, 0};
     tile.copy_to_device();
     for (auto i = 0; i < 10; i++)
-        tile.take_step<no_pw_int, friction_on_background>(0.05, push);
+        tile.take_step<no_pw_int, viscous_drag>(0.05, push);
     tile.copy_to_host();
     MU_ASSERT("Tile friction on background",
         isclose(tile.h_X[1].x - tile.h_X[0].x, 1));
@@ -208,7 +208,7 @@ const char* test_friction()
     grid.h_X[1] = float3{.5, 0, 0};
     grid.copy_to_device();
     for (auto i = 0; i < 10; i++)
-        grid.take_step<no_pw_int, friction_on_background>(0.05, push);
+        grid.take_step<no_pw_int, viscous_drag>(0.05, push);
     grid.copy_to_host();
     MU_ASSERT("Grid friction on background",
         isclose(grid.h_X[1].x - grid.h_X[0].x, 1));

@@ -52,7 +52,7 @@ int main(int argc, const char* argv[])
         if(time_step%40 == 0)
             cells.copy_to_host();
 
-        cells.take_step<constriction_force, friction_on_background>(dt);
+        cells.take_step<constriction_force, viscous_drag>(dt);
 
         if(time_step%40 == 0){
             output.write_positions(cells);
