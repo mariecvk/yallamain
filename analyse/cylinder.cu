@@ -11,17 +11,17 @@ const auto r_max = 1.f;  // Max Radius where cells interact with each other
 const auto r_min = 0.5f;  // the force is 0 for cells with this distance -> equilibrium distance
 
 // simulation parameter
-const auto n_time_steps = 10u;
+const auto n_time_steps = 200u;
 const auto dt = 0.05f;  // size of the timesteps -> smaller = more detailed and slower
 
 // for creating the cell sheet we define the rows and columes size and not every single cell
-const int n_ring = 12;
-const int n_schicht = 5;
+const int n_ring = 24;
+const int n_schicht = 10;
 const auto n_cells = n_ring * n_schicht;        // LATER 100 * 359 cells
 
 
 // Parameter for cylinder
-const auto R_zylinder = n_ring * r_min / (2.f * (float)M_PI); // same radius as calculated in python for 359 cells
+const auto R_zylinder = n_ring * r_min / (2.f * (float)M_PI); // same radius as calculated in python for 359 cells 
 const auto k_radial = 1.0f;  // higher number = cells stay better at clyinder shape
 
 
@@ -29,7 +29,7 @@ const auto k_radial = 1.0f;  // higher number = cells stay better at clyinder sh
 // LATER : could be used to proove if neighbor cell was activated last time step to create the puls movement
 __device__ int* d_neig;
 
-// R_zylinder als device-Konstante verfügbar machen
+// R_zylinder available as device constant
 __device__ float  d_R_dev;
 
 // Xi = position of cell i
@@ -46,28 +46,28 @@ __device__ float3 simulation_step(
 
 
     if (i == j) {
-        // Aktuellen Abstand von der z-Achse berechnen
-        float r_ist = sqrtf(Xi.x * Xi.x + Xi.y * Xi.y);
+        // Calculating distance of cell i to z-axis (assuming cylinder is centered on z-axis)
+        float r_ist = sqrtf(Xi.x * Xi.x + Xi.y * Xi.y);  
 
         if (r_ist > 0.f) {
-            // Radiale Richtung (normiert, zeigt von z-Achse weg)
+            // Normed radial direction (away from z-axis)
             float3 r_hat = {Xi.x / r_ist, Xi.y / r_ist, 0.f};
 
-            // Kraft proportional zur Abweichung vom Soll-Radius
-            // positiv = nach außen, negativ = nach innen
+            // Force proportional to deviation from target radius
+            // positiv = to the outside, negativ = to the inside
             float abweichung = R_zylinder - r_ist;
             dF = r_hat * (k_radial * abweichung);
         }
         return dF;
     }
 
-    if (dist > r_max) return dF;
+    if (dist > r_max) return dF; // if the distance between i and j ist too big = no forces
 
-    d_neig[i] += 1;
+    d_neig[i] += 1; // Counts amount of neighbors for cell i
 
-    auto a = 1.f;
-    auto F = a * (1.f - 2.f * dist);
-    dF = r * F / dist;
+    auto a = 1.f; // Force strength coefficient
+    auto F = a * (1.f - 2.f * dist); // Linear force function based on distance
+    dF = r * F / dist; // Force vector from j to i
     return dF;
 }
 
@@ -79,18 +79,17 @@ int main(int argc, const char* argv[])
 
     Solution<float3, Gabriel_solver> cells{n_cells, 50, r_max};
 
-    // ── Zylindrische Initialisierung ───────────────────────────────
-    // direkt aus deinem Python-Code übersetzt
-    float dz       = r_min * sqrtf(3.f) / 2.f;   // Abstand zwischen Ringen
-    float d_winkel = 2.f * (float)M_PI / (float)n_ring;       // Winkel zwischen Zellen im Ring
+    // ── Initialisation of Cylinder ───────────────────────────────
+    float dz       = r_min * sqrtf(3.f) / 2.f;   // Distance between the circles
+    float d_winkel = 2.f * (float)M_PI / (float)n_ring;       // Angle between cells in the ring
 
     for (int s = 0; s < n_schicht; s++) {
         for (int p = 0; p < n_ring; p++) {
             int   idx    = s * n_ring + p;
             float winkel = p * d_winkel;
 
-            // Optional: Hexgitter-Versatz für bessere Packung
-            if (s % 2 == 1) winkel += d_winkel * 0.5f;
+            // Optional: Hexagonal offset for better packing
+           // if (s % 2 == 1) winkel += d_winkel * 0.5f;
 
             cells.h_X[idx] = {
                 R_zylinder * cosf(winkel),   // x
@@ -114,7 +113,7 @@ int main(int argc, const char* argv[])
     // cells.h_X[0] = {0.f, 0.f, 0.f};  //the position of this cell is the origin x=0, y=0, z=0
     // cells.copy_to_device();
 
-    Vtk_output output{"cylinder"};
+    Vtk_output output{"cylinder"}; // Important to change the name of the output file, otherwise it will be overwritten by the pulsing simulation
     // in every time step the simulation_step function is called one time
     for (auto time_step = 0; time_step <= n_time_steps; time_step++) {
         cells.copy_to_host();

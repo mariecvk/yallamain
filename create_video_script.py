@@ -1,7 +1,7 @@
-import os
-from vedo import *
-from pathlib import Path
-import math
+import os # For handeling paths and executing shell commands
+from vedo import * # For visualization and video creation using vedo 
+from pathlib import Path # For handling file paths in a platform-independent way
+import math #
 import time
 
 def create_video(
@@ -10,7 +10,7 @@ def create_video(
     start_timestep=0,
     end_timestep=None,
     video_name="video_output",
-    skip_frames=50,
+    skip_frames=1,
     fps=1,
     point_size=80,
     show_axes=False,
@@ -43,13 +43,13 @@ def create_video(
     output_path = Path(output_dir)
     # Check if the output directory exists
     if not output_path.exists():
-        raise FileNotFoundError(f"Ordner nicht gefunden: {output_path.resolve()}")
+        raise FileNotFoundError(f"File not found: {output_path.resolve()}")
 
     # Get all VTK files matching the prefix
     vtk_files = sorted(output_path.glob(f"{file_prefix}*.vtk"))
     if not vtk_files:
         raise FileNotFoundError(
-            f"Keine VTK-Dateien gefunden in {output_path.resolve()} mit Prefix '{file_prefix}'"
+            f"No VTK-files were found in {output_path.resolve()} with the prefix '{file_prefix}'"
         )
 
     def extract_timestep(path):
@@ -68,7 +68,7 @@ def create_video(
             timestep_map[ts] = f
 
     if not timestep_map:
-        raise ValueError("Es konnten keine Timesteps aus den Dateinamen gelesen werden.")
+        raise ValueError("No timesteps could be read from the filenames.")
 
     available_timesteps = sorted(timestep_map.keys())
 
@@ -82,7 +82,7 @@ def create_video(
     ][::skip_frames]
 
     if not selected_timesteps:
-        raise ValueError("Keine Dateien im gewählten Timestep-Bereich gefunden.")
+        raise ValueError("No files found within the selected timestep range.")
 
     video_path = output_path / f"{video_name}.mp4"
 
@@ -126,9 +126,9 @@ def create_video(
     video = Video(str(video_path), fps=fps, backend="ffmpeg")
 
     total_frames = len(selected_timesteps)
-    print(f"Gefundene Dateien: {len(vtk_files)}")
-    print(f"Verwendete Frames: {total_frames}")
-    print(f"Video-Ausgabe: {video_path.resolve()}")
+    print(f"Found files: {len(vtk_files)}")
+    print(f"Used frames: {total_frames}")
+    print(f"Video output: {video_path.resolve()}")
     print()
 
     # Loop through selected timesteps to generate video frames
@@ -192,15 +192,6 @@ if __name__ == '__main__':
     # This part would typically be handled by a shell script or manual setup before running this Python script.
     # For direct execution, you'd need to ensure the 'output' directory with VTK files exists.
     
-    # You can uncomment and adapt these if you want to run the full setup from Python as well,
-    # but generally, it's better to separate the simulation/data generation from the visualization script.
-    # if os.path.exists('yalla_basic'):
-    #     os.system('rm -rf yalla_basic')
-    # os.system('git clone https://github.com/faebbs/yalla_basic.git')
-    # os.chdir('yalla_basic/yalla-main')
-    # os.system('pip install vedo')
-    # os.system('nvcc -std=c++11 -arch=sm_75 model.cu -o model')
-    # os.system('./model')
 
     # Call the video creation function
     create_video(

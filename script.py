@@ -1,11 +1,14 @@
-import os
-import subprocess
-from pathlib import Path
-import shutil
-import time
-import math
-import sys 
-
+import os # For changing directories and handling paths
+import subprocess # For running shell commands (compilation and execution)
+from pathlib import Path # For handling file paths in a platform-independent way
+import shutil # For copying files and directories
+import time # For measuring execution time
+import math # For any mathematical operations needed in the future
+import sys # For handling command-line arguments
+import vedo # For visualization and video creation from VTK files
+import glob, os, re # For file handling and regular expressions, if needed for filename parsing
+import imageio # For reading/writing video files
+import numpy # For numerical operations, if needed for processing VTK data
 # --- vedo imports ---
 from vedo import *
 
@@ -14,32 +17,39 @@ def compile_and_run_cuda(cuda_file_path: Path, output_executable_path: Path):
     Compiles a CUDA .cu file and runs the resulting executable.
     The executable is expected to generate its output in a directory named 'output'
     within the current working directory of its execution.
+    Args:
+        cuda_file_path (Path): Path to the CUDA source file (.cu).
+        output_executable_path (Path): Desired path for the compiled executable.
+    Raises:
+        subprocess.CalledProcessError: If compilation or execution fails, the error details 
+        will be printed and the exception will be raised.
     """
     print(f"\n--- Compiling {cuda_file_path.name} ---")
     compile_command = [
         "nvcc",
         "-std=c++11",
         "-arch=sm_75", # Using sm_75 as per previous successful compilation
-        str(cuda_file_path),
+        str(cuda_file_path), 
         "-o",
         str(output_executable_path)
-    ]
-    try:
-        compile_result = subprocess.run(compile_command, check=True, capture_output=True, text=True)
-        print(f"Compilation successful for {cuda_file_path.name}")
-        if compile_result.stdout: print(f"STDOUT:\n{compile_result.stdout}")
-        if compile_result.stderr: print(f"STDERR:\n{compile_result.stderr}")
+    ] # Compile command for nvcc, specifying C++11 standard and architecture. Adjust as needed for different CUDA versions or architectures.
 
-    except subprocess.CalledProcessError as e:
+    try:
+        compile_result = subprocess.run(compile_command, check=True, capture_output=True, text=True) # Run the compile command, capturing stdout and stderr. check=True will raise an error if compilation fails.
+        print(f"Compilation successful for {cuda_file_path.name}") # Print success message if compilation succeeds.
+        if compile_result.stdout: print(f"STDOUT:\n{compile_result.stdout}") # Print any standard output from the compilation process, if present.
+        if compile_result.stderr: print(f"STDERR:\n{compile_result.stderr}") # Print any standard error output from the compilation process, if present. This can include warnings or errors from the compiler.
+
+    except subprocess.CalledProcessError as e: # If compilation fails, this block will execute, printing the error details and re-raising the exception.
         print(f"Error compiling {cuda_file_path.name}:")
         print(f"STDOUT:\n{e.stdout}")
         print(f"STDERR:\n{e.stderr}")
         raise
 
-    print(f"\n--- Executing {output_executable_path.name} ---")
-    try:
+    print(f"\n--- Executing {output_executable_path.name} ---") # Print message indication start of execution
+    try: 
         pass
-    except subprocess.CalledProcessError as e: 
+    except subprocess.CalledProcessError as e: # If execution fails, this block will execute, printing the error details and re-raising the exception.
         print(f"Error executing {output_executable_path.name}:")
         print(f"STDOUT:\n{e.stdout}")
         print(f"STDERR:\n{e.stderr}")
@@ -51,7 +61,7 @@ def create_video(
     start_timestep=0,
     end_timestep=None,
     video_name="video_output",
-    skip_frames=50,
+    skip_frames=1,
     fps=1,
     point_size=80,
     show_axes=False,
@@ -68,7 +78,8 @@ def create_video(
         video_name (str): Name of the output video file (without extension).
         skip_frames (int): Number of frames to skip between rendered frames to reduce video length.
         fps (int): Frames per second for the output video.
-        point_size (int): Size of the points in the visualization.
+        point_size (int): Size of the points in the visualization (unused in sphere mode,
+                          kept for API compatibility).
         show_axes (bool): Whether to display coordinate axes in the video.
 
     Returns:
@@ -123,11 +134,50 @@ def create_video(
 
     video_path = output_path / f"{video_name}.mp4"
 
-    plt = Plotter(size=(2000, 2000), bg="white", offscreen=True)
+   # ── Camera calibration based on the first frame ──────────────────────────
+    # We read the positions from the first VTK file to automatically calculate
+    # the center and the required camera distance. This makes the camera work
+    # independently of how large the cylinder is.
+    first_vtk = timestep_map[selected_timesteps[0]]
+    first_pts = load(str(first_vtk))
+    pos = first_pts.points             # numpy array (N, 3): all cell positions
 
-    plt.camera.SetPosition(0, 0, 30)
-    plt.camera.SetFocalPoint(4, 0, 0)
-    plt.camera.SetViewUp(0, 1, 0)
+
+    # Center of the cylinder in x and y (cross-sectional plane)
+    cx = (pos[:, 0].max() + pos[:, 0].min()) / 2
+    cy = (pos[:, 1].max() + pos[:, 1].min()) / 2
+
+
+    # Center along the z-axis (longitudinal axis of the cylinder)
+    cz = (pos[:, 2].max() + pos[:, 2].min()) / 2
+
+
+    # Extent of the cylinder along z (= length)
+    z_spread = pos[:, 2].max() - pos[:, 2].min()
+
+
+    # Radius of the cylinder (extent in x or y)
+    xy_spread = max(
+        pos[:, 0].max() - pos[:, 0].min(),
+        pos[:, 1].max() - pos[:, 1].min(),
+    )
+
+
+    # The camera is positioned far along the +x-axis and looks along the x-direction
+    # at the longitudinal axis of the cylinder (the z-axis then runs horizontally in the image).
+    # cam_x_distance: large enough so that the entire cylinder fits into the image.
+    cam_x_distance = max(z_spread, xy_spread) * 4
+
+
+    print(f"Cylinder center:  x={cx:.3f}, y={cy:.3f}, z={cz:.3f}")
+    print(f"Cylinder extents: z_spread={z_spread:.3f}, xy_spread={xy_spread:.3f}")
+    print(f"Camera distance:  {cam_x_distance:.3f}")
+
+
+    # ── Initialize plotter ──────────────────────────────────────────────────
+    plt = Plotter(size=(2000, 2000), bg="white", offscreen=True)
+    plt.renderer.SetBackground(1, 1, 1)  # White background (RGB 0–1)
+
 
     axes = Axes(
         xrange=(0, 20),
@@ -141,40 +191,46 @@ def create_video(
     )
     axes.pos(0, 0, -2)
 
-    lut = build_lut(
-        [
-            (0.0, "#d3ddf7"), # Color for value 0.0
-            (1.0, "#117e07"), # Color for value 1.0
-            (2.0, "#000000"), # Color for value 2.0
-        ],
-        vmin=-0.5,
-        vmax=3.0,
-        below_color="white",
-        above_color="black",
-        nan_color="red",
-        interpolate=False,
-    )
+
+    # --- Removed color lookup table (lut) as it's no longer used for coloring ---
+
 
     video = Video(str(video_path), fps=fps, backend="ffmpeg")
 
+
     total_frames = len(selected_timesteps)
     print(f"Found VTK files: {len(vtk_files)}")
-    print(f"Used frames: {total_frames}")
-    print(f"Video-Output: {video_path.resolve()}")
+    print(f"Used frames:     {total_frames}")
+    print(f"Video output:    {video_path.resolve()}")
     print()
+
 
     for frame_num, timestep in enumerate(selected_timesteps):
         vtk_file = timestep_map[timestep]
 
-        p = load(str(vtk_file))
-        p.point_size(point_size)
 
-        if "activated" in p.pointdata.keys():
-            p.cmap(lut, p.pointdata["activated"])
-        else:
-            p.c("blue")
+        p = load(str(vtk_file))
+        positions = p.points           # numpy array (N, 3)
+
+
+        # ── Render cells as spheres ─────────────────────────────────────────
+        # Spheres() instead of point_size: each cell is drawn as a shiny 3D sphere.
+        # r=0.25 is a good starting value for r_min=0.5 (half the equilibrium
+        # distance → spheres almost touch each other).
+        spheres = Spheres(
+            positions,
+            r=0.25,   # Sphere radius – adjust if needed (r_min / 2 recommended)
+            res=12,   # Polygon resolution per sphere (higher = smoother, but slower)
+            c="lightblue", # Always set to lightblue as requested
+        )
+
+
+        # --- Removed conditional coloring based on 'neighbours' or 'activated' properties ---
+        spheres.lighting("glossy")       # Shiny sphere look (Phong lighting)
+
 
         plt.clear()
+
 
         timestep_text = Text2D(
             f"Timestep: {timestep}",
@@ -186,10 +242,33 @@ def create_video(
             font="Calco",
         )
 
+
+        # ── Camera: side view of the cylinder ───────────────────────────
+        # The camera is placed on the +x-axis and looks in the -x direction at the cylinder.
+        # The z-axis (longitudinal axis) then runs horizontally in the image:
+        # left z=0, right z=z_max → the pulse wave becomes visible from left to right.
+        camera_settings = {
+            "pos":        [cx + cam_x_distance, cy, cz],  # Camera to the right on the x-axis
+            "focalPoint": [cx,                  cy, cz],  # Focus point: cylinder center
+            "viewup":     [0, 1, 0],                       # y is "up" in the image
+        }
+
+
         if show_axes:
-            plt.show(p, axes, timestep_text, interactive=False, resetcam=False)
+            plt.show(
+                spheres, axes, timestep_text,
+                resetcam=(frame_num == 0),
+                camera=camera_settings,
+                interactive=False,
+            )
         else:
-            plt.show(p, timestep_text, interactive=False, resetcam=False)
+            plt.show(
+                spheres, timestep_text,
+                resetcam=(frame_num == 0),  # Re-center only for the first frame
+                camera=camera_settings,
+                interactive=False,
+            )
+
 
         video.add_frame()
 
@@ -200,7 +279,7 @@ def create_video(
             flush=True,
         )
 
-        del p
+        del p, spheres
 
     print()
     video.close()
@@ -213,15 +292,26 @@ def create_video(
     return video_path
 
 def main():
+    '''
+    Main function to compile and run a CUDA file, then create a video from its output.
+    The script expects a CUDA filename as a command-line argument and processes it accordingly.
+
+    Raises:      SystemExit: If no command-line argument is provided for the CUDA filename, the function will print usage instructions and exit the program.
+                 subprocess.CalledProcessError: If there is an error during compilation or execution of the CUDA file, the error details will be printed and the exception will be raised.
+                 FileNotFoundError: If the expected output directory is not found after execution, a warning will be printed and video creation will be skipped for that run.
+    Notes:       - The script assumes it is run from the 'analyse' subdirectory of the repository and that the repository is already cloned.
+                 - The CUDA file should generate its output in a directory named 'output' within the current working directory of its execution for the video creation to work correctly.
+                 - The script creates a new numbered directory for each run within a base 'yalla_runs' directory to store the outputs and videos, ensuring that previous runs are not overwritten.  
+    '''
     # Check for command-line argument for the CUDA filename
     if len(sys.argv) < 2:
         print("Usage: python script.py <cuda_filename.cu>")
         print("Example: python script.py springs.cu")
         sys.exit(1)
 
-    cuda_file_name = sys.argv[1]
+    cuda_file_name = sys.argv[1] 
 
-    # Assume the script is run from the yalla_basic/yalla-main directory
+    # Assume the script is run from the yallamain/analyse directory
     yalla_dir = Path.cwd()
 
     # Define a dedicated base directory for all numbered outputs within yalla_dir
@@ -229,8 +319,7 @@ def main():
     base_output_runs_dir.mkdir(parents=True, exist_ok=True)
     print(f"Created base run directory for outputs: {base_output_runs_dir}")
 
-    # The repository is assumed to be already cloned and the script executed from its yalla-main subdirectory.
-    # No need to clone or check for vedo installation here.
+    # The repository is assumed to be already cloned and the script executed from its analyse subdirectory.
 
     print(f"\n{'='*50}")
     print(f"Processing example: {cuda_file_name}")
@@ -270,7 +359,7 @@ def main():
         if execute_result.stdout:
             print(f"EXECUTABLE STDOUT:\n{execute_result.stdout}") # stdout = output from the executable
         if execute_result.stderr:
-            print(f"EXECUTABLE STDERR:\n{execute_result.stderr}") # stderr = error messages from the executable
+            print(f"EXECUTABLE STDERR:\n{e.stderr}") # stderr = error messages from the executable
 
         # The CUDA program will have created its 'output' directory inside current_run_dir
         actual_output_dir_for_video = current_run_dir / "output"

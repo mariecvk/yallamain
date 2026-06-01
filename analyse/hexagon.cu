@@ -1,31 +1,36 @@
+// This is a simple example of a cell sheet where the cells are arranged in a hexagonal pattern
+// The cells interact with each other through a simple force function that depends on the distance between the cells
+// The force function is 0 for a distance of 0.5 and becomes more repulsive for smaller distances and more attractive for larger distances
+// The simulation runs for a certain number of time steps and the positions of the cells are saved in VTK files for visualization
 
-#include "./include/dtypes.cuh"
-#include "./include/inits.cuh"
-#include "./include/property.cuh"
-#include "./include/solvers.cuh"
-#include "./include/vtk.cuh"
+#include "../include/dtypes.cuh"
+#include "../include/inits.cuh"
+#include "../include/property.cuh"
+#include "../include/solvers.cuh"
+#include "../include/vtk.cuh"
 #include <cmath>
 
+// cell interaction parameters
 const auto r_max = 1.f;  // Max Radius where cells interact with each other
-const auto r_min = 0.5f;  // the force is 0 for cells with this distance -> equilibrium distance
+const auto r_min = 0.5f;  // the force is 0 for cells with this distance 
 const auto n_time_steps = 10u;
 const auto dt = 0.05f;  // size of the timesteps -> smaller = more detailed and slower
 
-// for creating the cell sheet we define the rows and columes size and not every single cell
+// for creating the cell sheet we define the rows and columes size, not every single cell
 const int rows = 359;
 const int columes = 10;
 const auto n_cells = rows * columes;        // 200 * 359 cells
 
 // counter for the size of the neighborhood of a cell
 // LATER : could be used to proove if neighbor cell was activated last time step to create the puls movement
-__device__ int* d_neig;
+__device__ int* d_neig; // Device pointer to store the number of neighbors for each cell, which can be used to analyze cell interactions
 
 // Xi = position of cell i
 // r = vector from j to i
 // dist = distance between i and j
 // i = index of i
 // j = index of j
-// calculating a force away from j = r * F
+// calculating a force away from j = r * F  F
 __device__ float3 simulation_step(
     float3 Xi, float3 r, float dist, int i, int j)
 {
@@ -96,7 +101,7 @@ int main(int argc, const char* argv[])
     // cells.h_X[0] = {0.f, 0.f, 0.f};  //the position of this cell is the origin x=0, y=0, z=0
     // cells.copy_to_device();
 
-    Vtk_output output{"hexasheet"};
+    Vtk_output output{"hexagon"};
     // in every time step the simulation_step function is called one time
     for (auto time_step = 0; time_step <= n_time_steps; time_step++) {
         cells.copy_to_host();
