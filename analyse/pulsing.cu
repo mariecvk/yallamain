@@ -17,7 +17,7 @@
 #include "../include/solvers.cuh"    // Gabriel_solver: neighbour search on the GPU
 #include "../include/vtk.cuh"       // Vtk_output: stores positions as .vtk files
 #include <cmath>                    // sinf, cosf, sqrtf, M_PI
-
+#include <iostream>             // std::cout for printing parameters    
 
 
 // ============================================================
@@ -363,4 +363,16 @@ int main(int argc, const char* argv[])
 
     return 0;
     // GPU memory is automatically released when the program ends
+}
+int main(int argc, const char* argv[])
++ {
+    std::cout << "n_cells: " << n_cells << std::endl;
+    std::cout << "n_ring: " << n_ring << std::endl;
+    std::cout << "n_schicht: " << n_schicht << std::endl;
+    std::cout << "n_time_steps: " << n_time_steps << ", dt: " << dt << std::endl;
+    std::cout << "k_radial: " << k_radial << std::endl;
+    std::cout << "R_zylinder: " << R_zylinder << std::endl;
+    std::cout << "wave_amplitude: " << wave_amplitude << std::endl;
+    std::cout << "wave_speed: " << wave_speed << std::endl;
+    std::cout << "wave_number: " << wave_number << std::endl;
 }
